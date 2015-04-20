@@ -11,7 +11,7 @@ namespace OC\PlatformBundle\Controller;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 use OC\PlatformBundle\Entity\Advert;
-use OC\PlatformBundle\Entity\Image;
+use OC\PlatformBundle\Entity\AdvertSkill;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdvertController extends Controller {
@@ -65,53 +65,65 @@ class AdvertController extends Controller {
 
     public function viewAction($id)
     {
-        $repository = $this->getDoctrine()
-            ->getManager()
+        $em = $this->getDoctrine()->getManager();
+
+        // On récupère l'annonce $id
+        $advert = $em
             ->getRepository('OCPlatformBundle:Advert')
+            ->find($id)
         ;
 
-        // On récupère l'entité correspondante à l'id $id
-        $advert = $repository->find($id);
-
-        // $advert est donc une instance de OC\PlatformBundle\Entity\Advert
-        // ou null si l'id $id  n'existe pas, d'où ce if :
         if (null === $advert) {
             throw new NotFoundHttpException("L'annonce d'id ".$id." n'existe pas.");
         }
 
-        // Le render ne change pas, on passait avant un tableau, maintenant un objet
+        // On avait déjà récupéré la liste des candidatures
+        $listApplications = $em
+            ->getRepository('OCPlatformBundle:Application')
+            ->findBy(array('advert' => $advert))
+        ;
+
+        // On récupère maintenant la liste des AdvertSkill
+        $listAdvertSkills = $em
+            ->getRepository('OCPlatformBundle:AdvertSkill')
+            ->findBy(array('advert' => $advert))
+        ;
+
         return $this->render('OCPlatformBundle:Advert:view.html.twig', array(
-            'advert' => $advert
+            'advert'           => $advert,
+            'listApplications' => $listApplications,
+            'listAdvertSkills' => $listAdvertSkills
+        ));
+
+        return $this->render('OCPlatformBundle:Advert:view.html.twig', array(
+            'advert'           => $advert,
+            'listApplications' => $listApplications
         ));
     }
 
     public function addAction(Request $request)
     {
-        // Création de l'entité Advert
+        $em = $this->getDoctrine()->getManager();
+
         $advert = new Advert();
         $advert->setTitle('Recherche développeur Symfony2.');
         $advert->setAuthor('Alexandre');
         $advert->setContent("Nous recherchons un développeur Symfony2 débutant sur Lyon. Blabla…");
 
-        // Création de l'entité Image
-        $image = new Image();
-        $image->setUrl('http://sdz-upload.s3.amazonaws.com/prod/upload/job-de-reve.jpg');
-        $image->setAlt('Job de rêve');
+        $listSkills = $em->getRepository('OCPlatformBundle:Skill')->findAll();
 
-        // On lie l'image à l'annonce
-        $advert->setImage($image);
+        foreach ($listSkills as $skill)
+        {
+            $advertSkill = new AdvertSkill();
+            $advertSkill->setAdvert($advert);
+            $advertSkill->setSkill($skill);
+            $advertSkill->setLevel('Expert');
 
-        // On récupère l'EntityManager
-        $em = $this->getDoctrine()->getManager();
+            $em->persist($advertSkill);
+        }
 
-        // Étape 1 : On « persiste » l'entité
         $em->persist($advert);
 
-        // Étape 1 bis : si on n'avait pas défini le cascade={"persist"},
-        // on devrait persister à la main l'entité $image
-        // $em->persist($image);
-
-        // Étape 2 : On déclenche l'enregistrement
         $em->flush();
 
         return $this->render('OCPlatformBundle:Advert:add.html.twig');
@@ -119,15 +131,21 @@ class AdvertController extends Controller {
 
     public function editAction($id, Request $request)
     {
-        // ...
+        $em = $this->getDoctrine()->getManager();
 
-        $advert = array(
-            'title'   => 'Recherche développpeur Symfony2',
-            'id'      => $id,
-            'author'  => 'Alexandre',
-            'content' => 'Nous recherchons un développeur Symfony2 débutant sur Lyon. Blabla…',
-            'date'    => new \Datetime()
-        );
+        $advert = $em->getRepository('OCPlatformBundle:Advert')->find($id);
+
+        if (null === $advert) {
+            throw new NotFoundHttpException("L'annonce d'id ".$id." n'existe pas.");
+        }
+
+        $listCategories = $em->getRepository('OCPlatformBundle:Category')->findAll();
+
+        foreach ($listCategories as $category) {
+            $advert->addCategory($category);
+        }
+
+        $em->flush();
 
         return $this->render('OCPlatformBundle:Advert:edit.html.twig', array(
             'advert' => $advert
@@ -136,9 +154,19 @@ class AdvertController extends Controller {
 
     public function deleteAction($id)
     {
-        // Ici, on récupérera l'annonce correspondant à $id
+        $em = $this->getDoctrine()->getManager();
 
-        // Ici, on gérera la suppression de l'annonce en question
+        $advert = $em->getRepository('OCPlatformBundle:Advert')->find($id);
+
+        if (null === $advert) {
+            throw new NotFoundHttpException("L'annonce d'id ".$id." n'existe pas.");
+        }
+
+        foreach ($advert->getCategories() as $category) {
+            $advert->removeCategory($category);
+        }
+
+        $em->flush();
 
         return $this->render('OCPlatformBundle:Advert:delete.html.twig');
     }

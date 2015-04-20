@@ -12,4 +12,27 @@ use Doctrine\ORM\EntityRepository;
  */
 class ApplicationRepository extends EntityRepository
 {
+    public function getAdvertWithCategories(array $categoryNames)
+    {
+        $qb = $this->createQueryBuilder('a');
+
+        $qb->join('a.categories', 'c')
+            ->addSelect('c');
+
+        $qb->where($qb->expr()->in('c.name', $categoryNames));
+
+        return $qb->getQuery()->getResult();
+    }
+
+    public function getApplicationsWithAdvert($limit)
+    {
+        $qb = $this->createQueryBuilder('a');
+
+        $qb->join('a.advert', 'adv')
+            ->addSelect('adv');
+
+        $qb->setMaxResults($limit);
+
+        return $qb->getQuery()->getResult();
+    }
 }
